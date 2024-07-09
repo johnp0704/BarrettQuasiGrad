@@ -1,0 +1,10 @@
+name = "QuasiGradUpdates"
+uuid = "d229725b-bac9-4944-a25e-cc9e0af8a42f"
+authors = ["johnp "]
+version = "0.1.0"
+
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+QuasiGrad = "ead79d5d-eeb6-4e9e-b9c0-d4b75b0c44ab"
