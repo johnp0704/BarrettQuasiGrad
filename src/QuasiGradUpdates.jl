@@ -2,26 +2,30 @@ module QuasiGradUpdates
 using CUDA
 
 
-A_dict = Dict{String, CuArray{Float32, 2}}()
-x_dict = Dict{String, CuArray{Float32, 2}}()
-y_dict = Dict{String, CuArray{Float32, 2}}()
+A_out = Vector{CuArray{Float32, 2}}()
+x_out = Vector{CuArray{Float32, 2}}()
+y_out = Vector{CuArray{Float32, 2}}()
 
 for i in 1:1000
-    key_A = "A_$i"
     A_i = randn(Float32,10,10)
     A_gpu = cu(A_i)
-    A_dict[key_A] = A_gpu
+    push!(A_out, A_gpu)
     
-    key_x = "x_$i"
     x_i = randn(Float32,10,1)
     x_gpu = cu(x_i)
-    x_dict[key_x] = x_gpu
+    push!(x_out, x_gpu)
 
-    key_y = "y_$i"
     y_gpu = A_gpu * x_gpu
-    y_dict[key_y] = y_gpu
+    push!(y_out, y_gpu)
+
+    println(A_out[i])
+    println(x_out[i])
+    println(y_out[i])
 end
-println(x_dict["x_156"])
-println(y_dict["y_290"])
 
 end
+
+println()
+#this has been added to test pushing
+
+
