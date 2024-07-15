@@ -132,7 +132,7 @@ fill!(y_d, 2)
 function bench_gpu3!(y, x)
     numblocks = ceil(Int, length(y)/256)
     CUDA.@sync begin
-        @cuda threads=256 blocks=numblocks gpu_add3!(y, x)
+        @cuda threads= 256 blocks=numblocks gpu_add3!(y, x)
     end
 end
 

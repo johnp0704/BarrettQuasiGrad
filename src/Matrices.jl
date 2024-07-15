@@ -53,8 +53,8 @@ function y_calc_gpu(A_gpu::CuArray{Float32,2}, x_gpu::CuArray{Float32,2})
 end
 y_gpu = similar(x_gpu)
 
-@time y_gpu .= y_calc_gpu(A_gpu, x_gpu) #gives ~0.010617 seconds, 711 allocations
-@btime y_gpu .= y_calc_gpu(A_gpu, x_gpu) #gives ~30.400 us, 104 allocations
+@time y_gpu .= y_calc_gpu(A_gpu, x_gpu) #gives ~0.005614 seconds, 711 allocations
+@btime y_gpu .= y_calc_gpu(A_gpu, x_gpu) #gives ~24.500 us, 104 allocations
 
 
 #%% CPU
@@ -67,5 +67,5 @@ function z_calc_cpu(B, w)
     return B * w
 end
 z = similar(x)
-@time z .= z_calc_cpu(B, w) #0.004153 seconds, 391 allocations
-@btime z .= z_calc_cpu(B, w) #192.235 ns, 2 allocations
+@time z .= z_calc_cpu(B, w) #~0.003634 seconds, 388 allocations
+@btime z .= z_calc_cpu(B, w) #~130.000 ns, 2 allocations
