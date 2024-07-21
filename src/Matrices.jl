@@ -42,10 +42,10 @@ using BenchmarkTools
 
 #%% GPU
 
-A = randn(10,10)
+A = randn(1000,1000)
 A_gpu = cu(A)
 
-x = randn(10,1)
+x = randn(1000,1)
 x_gpu = cu(x)
 
 function y_calc_gpu(A_gpu::CuArray{Float32,2}, x_gpu::CuArray{Float32,2})
