@@ -47,9 +47,9 @@ println(norm(y_cpu - A_cpu * x_cpu) < 1e-5)  #Print true if the multiplication w
 
 
 #try 1000x1000 matrices (or larger) -----
-#do many matrix vector products, not just one, multiple parallel (try one kernel that calls a different block for different functions)
+#do many matrix vector products, not just one, multiple parallel (try one kernel that calls a different block for different functions) ----
 #figure out blocks and threads -----
 #fix timing operations (get statistics, lab notebook)
-#try more tricks, two different operations or such (sin exponential, etc.)
+#try more tricks, two different operations or such (sin exponential, etc.) 
 #type stabilize, add typed into function arguments (makes allocations less) -----
 
