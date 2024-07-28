@@ -5,7 +5,6 @@ using LinearAlgebra
 #%% Get device properties
 device = CUDA.device()
 
-# Function to get device properties
 function get_device_properties(device)
     max_threads_per_block = CUDA.attribute(device, CUDA.DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK)
     max_grid_dim_x = CUDA.attribute(device, CUDA.DEVICE_ATTRIBUTE_MAX_GRID_DIM_X)
@@ -19,11 +18,12 @@ end
 max_threads_per_block, max_grid_dim_x, max_grid_dim_y, max_grid_dim_z, num_sms = get_device_properties(device)
 
 #%% Matrix-vector kernel
-function mat_vec_kernel!(y::CuArray{Float64}, A::CuArray{Float64}, x::CuArray{Float64}, offset::Int)
+function mat_vec_kernel!(y::CuDeviceMatrix{Float64}, A::CuDeviceMatrix{Float64}, x::CuDeviceMatrix{Float64}, offset::Int64)
     i = threadIdx().x + (blockIdx().x - 1) * blockDim().x
     j = threadIdx().y + (blockIdx().y - 1) * blockDim().y + offset
+
     if i <= size(A, 1) && j <= size(x, 2)
-        sum = 0.0 
+        sum = 0.0 # Use Float64 for consistency with input types
         for h in 1:size(A, 2)
             sum += A[i, h] * x[h, j]
         end
@@ -33,37 +33,83 @@ function mat_vec_kernel!(y::CuArray{Float64}, A::CuArray{Float64}, x::CuArray{Fl
 end
 
 # Matrix-vector product function
-function mat_vec_prod!(y::CuArray{Float64}, A::CuArray{Float64}, x::CuArray{Float64}, max_threads_per_block::Int, max_grid_dim_y::Int)
-    # Launch configuration
-    threads_x = min(size(A, 1), max_threads_per_block)
-    threads_y = min(size(x, 2), div(max_threads_per_block, threads_x))
-    blocks_x = cld(size(A, 1), threads_x)
-    max_calcs_per_launch = max_grid_dim_y * threads_y
+function mat_vec_prod!(y::CuArray{Float64}, matrices::Vector{CuArray{Float64, 2}}, x::CuArray{Float64}, max_threads_per_block::Int64, max_grid_dim_y::Int64)
+    num_matrices = length(matrices)
+    combined_y = CUDA.fill(0.0, size(matrices[1], 1), size(x, 2))
 
-    for offset in 0:max_calcs_per_launch:size(x, 2)-1
-        remaining_calcs = min(max_calcs_per_launch, size(x, 2) - offset)
-        blocks_y = cld(remaining_calcs, threads_y)
-        CUDA.@sync begin
-            @cuda threads=(threads_x, threads_y) blocks=(blocks_x, blocks_y) mat_vec_kernel!(y, A, x, offset)
+    for k in 1:num_matrices
+        A = matrices[k]
+
+        # Launch configuration
+        threads_x = min(size(A, 1), max_threads_per_block)
+        threads_y = min(size(x, 2), div(max_threads_per_block, threads_x))
+        blocks_x = cld(size(A, 1), threads_x)
+        max_calcs_per_launch = max_grid_dim_y * threads_y
+
+        for offset in 0:max_calcs_per_launch:size(x, 2)-1
+            remaining_calcs = min(max_calcs_per_launch, size(x, 2) - offset)
+            blocks_y = cld(remaining_calcs, threads_y)
+            CUDA.@sync begin
+                @cuda threads=(threads_x, threads_y) blocks=(blocks_x, blocks_y) mat_vec_kernel!(combined_y, A, x, offset)
+            end
         end
+
+        # Accumulate the results from each matrix-vector multiplication
+        y .+= combined_y
+        CUDA.fill!(combined_y, 0.0)  # Reset combined_y for the next matrix
     end
 end
 
-#%% Number of calculations to perform
-num_calcs = 200000
+#%% How many matrices?
+function create_random_cuarrays(num_matrices::Int, rows::Int, cols::Int)
+    matrices = Vector{CuArray{Float64, 2}}(undef, num_matrices)
+    for i in 1:num_matrices
+        matrices[i] = CUDA.fill(rand(), rows, cols)
+    end
+    return matrices
+end
 
-#%% Sets matrices
-A = CUDA.fill(rand(), 1000, 1000)  # Create a 1000x1000 CuArray of rand values
+# Matrices setup
+num_matrices = 5
+rows = 1000
+cols = 1000
+random_cuarrays = create_random_cuarrays(num_matrices, rows, cols)
+
+#%% Number of calculations to perform
+num_calcs = 1000
+
 x = CUDA.fill(rand(), 1000, num_calcs)  # Create a 1000xnum_calcs CuArray with rand values
-y = similar(x)
+y = CUDA.fill(0.0, 1000, num_calcs)  # Initialize y as a 1000xnum_calcs CuArray with zeros
 
 #%% Tests timing
-@time mat_vec_prod!(y, A, x, max_threads_per_block, max_grid_dim_y) # Measure time taken for matrix-vector multiplication
-@btime mat_vec_prod!(y, A, x, max_threads_per_block, max_grid_dim_y) # Benchmark the function
+@btime CUDA.@sync mat_vec_prod!(y, random_cuarrays, x, max_threads_per_block, max_grid_dim_y) # Benchmark the function
+CUDA.@profile mat_vec_prod!(y, random_cuarrays, x, max_threads_per_block, max_grid_dim_y)
 
+
+
+
+
+
+#------------------------------------------------------------------------------------------------
 #%% Verifies functionality
 y_cpu = Array(y)  # Copy result back to CPU for verification
-A_cpu = Array(A)
 x_cpu = Array(x)
-verification = all(norm(y_cpu[:, j] - A_cpu * x_cpu[:, j]) < 1e-5 for j in 1:num_calcs)
-println(verification)  # Print true if the multiplication was successful
+A_cpu_list = [Array(A) for A in random_cuarrays]
+
+# Check only a subset of columns
+subset_cols = 1:min(10, num_calcs)  # Check first 10 columns or less if num_calcs < 10
+
+# Debugging information
+println("Debugging Information:")
+for j in subset_cols
+    y_correct = zeros(Float64, rows)
+    for A_cpu in A_cpu_list
+        y_correct .+= A_cpu * x_cpu[:, j]
+    end
+    diff_norm = norm(y_cpu[:, j] - y_correct)
+    println("Column $j difference norm: $diff_norm")
+end
+
+# Final verification
+verification = all(norm(y_cpu[:, j] - sum(A_cpu * x_cpu[:, j] for A_cpu in A_cpu_list)) < 1e-5 for j in subset_cols)
+println("Overall verification: $verification")  # Print true if the multiplication was successful
