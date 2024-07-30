@@ -61,18 +61,43 @@ cols_cpu = 1000
 random_arrays_cpu = create_random_arrays(num_matrices_cpu, rows_cpu, cols_cpu)
 
 #%% CPU calculation function
-function y_calc_cpu(random_arrays_cpu::Vector{Array{Float64, 2}}, x_cpu::Array{Float64, 2}, y_cpu_arrays::Vector{Array{Float64, 2}})
+function y_calc_cpuzz(A::Vector{Matrix{Float64}}, random_arrays_cpu::Vector{Array{Float64, 2}}, x_cpu::Array{Float64, 2}, y_cpu_arrays::Array{Float64, 2}) #y_cpu_arrays::Vector{Array{Float64, 2}})
     for i in 1:length(random_arrays_cpu)
-        push!(y_cpu_arrays, random_arrays_cpu[i] * x_cpu)
+        #push!(y_cpu_arrays, random_arrays_cpu[i] * x_cpu)
+        # for 2d arrays
+        mul!(A[i], random_arrays_cpu[i], x_cpu)
+        #mul!(y_cpu_arrays[:,(1:1000) .+ (i-1)*1000], random_arrays_cpu[i], x_cpu)
+        #y_cpu_arrays[:,(1:1000) .+ (i-1)*1000] .= 
+        #random_arrays_cpu[i] * x_cpu
+
+        # for 3d array
+        #y_cpu_arrays[i] = random_arrays_cpu[i] * x_cpu
     end
 end
 
 
 #%%Initialize Result arrays
 y_cpu_arrays = Vector{Array{Float64, 2}}()
+y_cpu_arrays = zeros(rows_cpu, num_matrices_cpu*cols_cpu)
 
 #%% Timing
-@time y_calc_cpu(random_arrays_cpu, x_cpu, y_cpu_arrays)
+A = [randn(1000,1000) for ii in 1:5]
+y_cpu_arrays = zeros(rows_cpu, num_matrices_cpu*cols_cpu)
+
+@time y_calc_cpuzz(A, random_arrays_cpu, x_cpu, y_cpu_arrays)
+
 #%% btime
 y_cpu_arrays = Vector{Array{Float64, 2}}()
 @btime y_calc_cpu(random_arrays_cpu, x_cpu, y_cpu_arrays) 
+
+# %% 
+function matmat(A::Matrix{Float64}, B::Matrix{Float64}, C::Matrix{Float64})
+    return mul!(C, A, B)
+end
+
+A = randn(500,500)
+B = randn(500,500)
+C = randn(500,500)
+
+# %%
+@btime matmat(A,B,C)
