@@ -28,8 +28,7 @@ function GPU_calc()
     # call penalty costs
     cs = prm.vio.s_flow * qG.scale_c_sflow_testing
 
-    # Organize the relevant line values for each time step and transfer to GPU
-    # Flatten the arrays and use views to handle each time step
+    #Concatenate into one, 1D veritcal array to calculate using
     vm_fr = CuArray(vcat([stt.vm[t][idx.acline_fr_bus] for t in prm.ts.time_keys]...))
     va_fr = CuArray(vcat([stt.va[t][idx.acline_fr_bus] for t in prm.ts.time_keys]...))
     vm_to = CuArray(vcat([stt.vm[t][idx.acline_to_bus] for t in prm.ts.time_keys]...))
@@ -50,18 +49,18 @@ function GPU_calc()
     acline_sto = similar(vm_fr)
 
 
-    # Perform computations on GPU
+    # Perform calculations on GPU
     for tidx in 1:length(prm.ts.time_keys)
         tii = prm.ts.time_keys[tidx]
 
         # duration
         dt = prm.ts.duration[tii]
 
-        # Access slices of the flattened arrays corresponding to this time step
+        # Get slices of CuArrays for each time step
         offset = (tidx - 1) * length(stt.vm_fr[tii])
         range = offset + 1 : offset + length(stt.vm_fr[tii])
 
-        # Compute line values on the GPU
+        # Calculate values on the GPU
         @views begin
             cos_ftp[range] .= cos.(va_fr[range] .- va_to[range])
             sin_ftp[range] .= sin.(va_fr[range] .- va_to[range])
@@ -69,13 +68,22 @@ function GPU_calc()
             vtt[range] .= vm_to[range] .^ 2
             vft[range] .= vm_fr[range] .* vm_to[range]
 
-            # Evaluate the function for active and reactive power flow
+            #active power flow -- from -> to
             pfr[range] .= (g_sr .+ g_fr) .* vff[range] .+ (-g_sr .* cos_ftp[range] .- b_sr .* sin_ftp[range]) .* vft[range]
+
+            #reactive power flow -- from -> to
             qfr[range] .= (-b_sr .- b_fr .- b_ch ./ 2.0) .* vff[range] .+ (b_sr .* cos_ftp[range] .- g_sr .* sin_ftp[range]) .* vft[range]
+
+            # apparent power flow -- from -> to
             acline_sfr[range] .= sqrt.(pfr[range].^2 .+ qfr[range].^2)
 
+            #active power flow -- to -> from
             pto[range] .= (g_sr .+ g_to) .* vtt[range] .+ (-g_sr .* cos_ftp[range] .+ b_sr .* sin_ftp[range]) .* vft[range]
+
+            #reactive power flow -- to -> from
             qto[range] .= (-b_sr .- b_to .- b_ch ./ 2.0) .* vtt[range] .+ (b_sr .* cos_ftp[range] .+ g_sr .* sin_ftp[range]) .* vft[range]
+
+            #apparent power flow -- to -> from
             acline_sto[range] .= sqrt.(pto[range].^2 .+ qto[range].^2)
 
         end
