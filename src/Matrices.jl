@@ -1,5 +1,7 @@
 using CUDA
 using BenchmarkTools
+using LinearAlgebra
+using Base.Threads
 
 #%% Generate Common array
 x_length = 1000
@@ -39,7 +41,7 @@ y_arrays = Vector{CuArray{Float64, 2}}()  # Reset y_arrays
 @btime y_calc_gpu(random_cuarrays, x_gpu, y_arrays) 
 
 
-
+#-------------------------------------------------------------------------------------------------------------------------
 
 #%% CPU
 x_cpu_length = 1000
@@ -101,3 +103,41 @@ C = randn(500,500)
 
 # %%
 @btime matmat(A,B,C)
+
+#-------------------------------------------------------------------------------------------------
+
+#%% CPU Multi-Thread
+x_cpu_length = 1000
+x_cpu = fill(rand(Float64), 1000, x_cpu_length)
+
+# Function to create random matrices
+function create_random_arrays(num_matrices_cpu::Int, rows_cpu::Int, cols_cpu::Int)
+    matrices_cpu = Vector{Matrix{Float64}}(undef, num_matrices_cpu)
+    for i in 1:num_matrices_cpu
+        matrices_cpu[i] = fill(rand(Float64), rows_cpu, cols_cpu)
+    end
+    return matrices_cpu
+end
+
+# Set up random matrices
+num_matrices_cpu = 5
+rows_cpu = 1000
+cols_cpu = 1000
+random_arrays_cpu = create_random_arrays(num_matrices_cpu, rows_cpu, cols_cpu)
+
+#%% CPU calculation function with threading
+function y_calc_cpuzz!(A::Vector{Matrix{Float64}}, random_arrays_cpu::Vector{Matrix{Float64}}, x_cpu::Matrix{Float64}, y_cpu_arrays::Matrix{Float64})
+    @threads for i in 1:length(random_arrays_cpu)
+        mul!(A[i], random_arrays_cpu[i], x_cpu)
+    end
+end
+
+# Initialize result arrays
+y_cpu_arrays = zeros(rows_cpu, num_matrices_cpu * cols_cpu)
+A = [randn(1000, 1000) for _ in 1:num_matrices_cpu]
+
+#%% Timing with @time
+@time y_calc_cpuzz!(A, random_arrays_cpu, x_cpu, y_cpu_arrays)
+
+#%% Benchmark with @btime
+@btime y_calc_cpuzz!(A, random_arrays_cpu, x_cpu, y_cpu_arrays)
